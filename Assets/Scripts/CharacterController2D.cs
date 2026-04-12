@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -36,7 +37,7 @@ public class CharacterController2DScript : MonoBehaviour
     [HeaderAttribute("Jump Stuff")]
     public float maxJumps = 2f;
     public float jumpFatigue = 0.8f;
-    private float currJumps = 0f;
+    public float currJumps = 0f;
 
     public GameObject breadProjectile;
     public Transform firePoint;
@@ -56,6 +57,7 @@ public class CharacterController2DScript : MonoBehaviour
     public float wallJumpForce = 5f;
     public float wallJumpVertical = 2f;
     public bool isTouchingWall = false;
+    public bool canWallJump= false;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Start()
@@ -98,20 +100,41 @@ public class CharacterController2DScript : MonoBehaviour
         animator.SetFloat("Speed", Mathf.Abs(moveDirection));
 
         // get the jump action
-        if (jumpAction.WasPressedThisFrame() && _isAlive && currJumps < maxJumps)
-        {
-            currJumps++;
+        //if (jumpAction.WasPressedThisFrame() && _isAlive && (currJumps < maxJumps || isTouchingWall))
+        //{
+        //    currJumps++;
 
-            jumpFlag = true;
-            animator.SetBool("Grounded", false);
-            animator.SetFloat("Jumps", currJumps);
-            audioComponent.PlayOneShot(jumpClip);
-            //Debug.Log(isGrounded + "" + currJumps);
-            if (currJumps >= 2)
+        //    jumpFlag = true;
+        //    animator.SetBool("Grounded", false);
+        //    animator.SetFloat("Jumps", currJumps);
+        //    audioComponent.PlayOneShot(jumpClip);
+        //    //Debug.Log(isGrounded + "" + currJumps);
+        //    if (currJumps >= 2 && !isTouchingWall)
+        //    {
+        //        ShootBread();
+        //    }
+        //}
+
+        if (jumpAction.WasPressedThisFrame() && _isAlive)
+        {
+            if (isTouchingWall && !isGrounded)
             {
-                ShootBread();
+                jumpFlag = true;
+                audioComponent.PlayOneShot(jumpClip);
+            }
+            else if (currJumps < maxJumps)
+            {
+                currJumps++;
+                jumpFlag = true;
+                animator.SetBool("Grounded", false);
+                animator.SetFloat("Jumps", currJumps);
+                audioComponent.PlayOneShot(jumpClip);
+
+                if (currJumps >= 2) ShootBread();
             }
         }
+
+
 
         if (jumpFlag == false)
         {
@@ -173,41 +196,47 @@ public class CharacterController2DScript : MonoBehaviour
             float checkDist = 0.5f;
             bool wallRight = Physics2D.OverlapCircle((Vector2)transform.position + Vector2.right * checkDist, 0.05f, wallLayerMask);
             bool wallLeft = Physics2D.OverlapCircle((Vector2)transform.position + Vector2.left * checkDist, 0.05f, wallLayerMask);
-            
-            isTouchingWall = wallRight || wallLeft;
+            bool wallTop = Physics2D.OverlapCircle((Vector2)transform.position + Vector2.up * checkDist, 0.05f, wallLayerMask);
+
+
+            isTouchingWall = (wallRight || wallLeft || wallTop) && !isGrounded;
 
             if (isTouchingWall && !isGrounded)
             {
-                if (currJumps > 0)
-                {
-                    currJumps = 0;
-                    animator.SetFloat("Jumps", 0); // Stops the flipping
-                }
-
                 rb.linearVelocityY = Mathf.Clamp(rb.linearVelocityY, -wallSlideSpeed, float.MaxValue);
 
+                if (!jumpFlag && currJumps > 0)
+                {
+                    currJumps = 1;
+                    animator.SetFloat("Jumps", 0);
+                }
+         
                 if (jumpFlag)
                 {
                     float jumpDir = wallRight ? -1f : 1f;
                     rb.linearVelocity = new Vector2(jumpDir * wallJumpForce, wallJumpVertical);
 
-                    // Flip the toaster to face the jump direction
+
                     facingRight = (jumpDir > 0);
                     Vector3 currentScale = transform.localScale;
                     currentScale.x = facingRight ? Mathf.Abs(currentScale.x) : -Mathf.Abs(currentScale.x);
                     transform.localScale = currentScale;
 
-                    // Set jumps to 1 so the player can still double-jump once after the kick
-                    currJumps = 1;
-                    animator.SetFloat("Jumps", 1);
+                    // Set to 2 so they can't double jump after leaving the wall
+                    currJumps = 2f;
+                    animator.SetFloat("Jumps", 2f);
                     jumpFlag = false;
                 }
             }
+
         }
+
+
+
 
         // apply the movement velocity
         rb.linearVelocityX = moveDirection * speed;
-        animator.SetBool("Grounded", (isGrounded || isTouchingWall)&& currJumps == 0);
+        animator.SetBool("Grounded", isGrounded || (isTouchingWall && currJumps == 0));
     }
 
     private void OnDrawGizmos()
@@ -296,14 +325,6 @@ public class CharacterController2DScript : MonoBehaviour
                 bread.Collect();
 
             SoundManager.Steve.MakeParrySound();
-        }
-
-        if (collision.CompareTag("Jam"))
-        {
-            // Now this code will actually run!
-            hasJamPowerUp = true;
-            GetComponent<SpriteRenderer>().color = new Color(0.5f, 0, 0.5f);
-            Destroy(collision.gameObject);
         }
     }
 
