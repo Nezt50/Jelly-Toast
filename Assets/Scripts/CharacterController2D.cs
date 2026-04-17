@@ -385,6 +385,6 @@ public class CharacterController2DScript : MonoBehaviour
 
     public void AddLife()
     {
-        lives = 2;
+        lives++;
     }
 }
